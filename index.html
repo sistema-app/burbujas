@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Feliz 14 de Febrero</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Montserrat:wght@300&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #f3e7e9; }
+    .font-romantic { font-family: 'Great Vibes', cursive; }
+    .font-sub { font-family: 'Montserrat', sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useEffect, useRef } = React;
+
+    const App = () => {
+      const mountRef = useRef(null);
+
+      useEffect(() => {
+        // 1. Configuración de la Escena 3D
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // Alpha true permite que se vea el fondo CSS (ópalo morado)
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimización para móviles
+        mountRef.current.appendChild(renderer.domElement);
+
+        // 2. Iluminación (Da el brillo elegante a las burbujas)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        // 3. Creación de Burbujas
+        const bubbles = [];
+        const pastelColors = [0xffb3ba, 0xffdfba, 0xffffba, 0xbaffc9, 0xbae1ff, 0xe0c3fc, 0xfad0c4];
+        const geometry = new THREE.SphereGeometry(1, 32, 32);
+
+        for(let i = 0; i < 35; i++) {
+           // Material "MeshPhysicalMaterial" simula cristal/agua
+           const material = new THREE.MeshPhysicalMaterial({
+             color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
+             transmission: 0.9,
+             opacity: 1,
+             transparent: true,
+             roughness: 0.1,
+             ior: 1.2,
+             thickness: 0.5
+           });
+           const sphere = new THREE.Mesh(geometry, material);
+           
+           // Posición inicial aleatoria
+           sphere.position.set(
+               (Math.random() - 0.5) * 25, 
+               (Math.random() - 0.5) * 20 - 10, 
+               (Math.random() - 0.5) * 10 - 5
+           );
+           
+           sphere.userData = { 
+             speedY: Math.random() * 0.03 + 0.015, 
+             wobbleSpeed: Math.random() * 0.02,
+             popping: false
+           };
+           
+           scene.add(sphere);
+           bubbles.push(sphere);
+        }
+
+        camera.position.z = 12;
+
+        // 4. Sintetizador de Sonido (Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const playPop = () => {
+           if(audioCtx.state === 'suspended') audioCtx.resume();
+           const osc = audioCtx.createOscillator();
+           const gain = audioCtx.createGain();
+           
+           // Notas musicales suaves (C5, E5, G5, C6, E6)
+           const pitches = [523.25, 659.25, 783.99, 1046.50, 1318.51]; 
+           osc.frequency.value = pitches[Math.floor(Math.random() * pitches.length)];
+           osc.type = 'sine'; // Sonido suave y redondo
+           
+           osc.connect(gain);
+           gain.connect(audioCtx.destination);
+           
+           // Curva de sonido (Ataque rápido, decaimiento suave)
+           gain.gain.setValueAtTime(0, audioCtx.currentTime);
+           gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
+           gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+           
+           osc.start(audioCtx.currentTime);
+           osc.stop(audioCtx.currentTime + 0.25);
+        };
+
+        // 5. Interacción (Click / Toque)
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        const onInteract = (event) => {
+           let clientX = event.clientX;
+           let clientY = event.clientY;
+           if(event.touches && event.touches.length > 0) {
+             clientX = event.touches[0].clientX;
+             clientY = event.touches[0].clientY;
+           }
+
+           mouse.x = (clientX / window.innerWidth) * 2 - 1;
+           mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+           raycaster.setFromCamera(mouse, camera);
+
+           const intersects = raycaster.intersectObjects(bubbles);
+           if(intersects.length > 0) {
+              const bubble = intersects[0].object;
+              if(!bubble.userData.popping) {
+                 bubble.userData.popping = true;
+                 playPop();
+              }
+           }
+        };
+
+        window.addEventListener('mousedown', onInteract);
+        window.addEventListener('touchstart', onInteract, {passive: false});
+
+        // 6. Responsividad
+        const handleResize = () => {
+           camera.aspect = window.innerWidth / window.innerHeight;
+           camera.updateProjectionMatrix();
+           renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+        window.addEventListener('resize', handleResize);
+
+        // 7. Ciclo de Animación
+        let animationFrameId;
+        const animate = () => {
+           animationFrameId = requestAnimationFrame(animate);
+           
+           bubbles.forEach(bubble => {
+              if(bubble.userData.popping) {
+                 // Efecto de reventar: Crece y se desvanece rápido
+                 bubble.scale.addScalar(0.15);
+                 bubble.material.opacity -= 0.1;
+                 
+                 // Resetear burbuja abajo
+                 if(bubble.material.opacity <= 0) {
+                    bubble.userData.popping = false;
+                    bubble.scale.set(1,1,1);
+                    bubble.material.opacity = 1;
+                    bubble.position.y = -12;
+                    bubble.position.x = (Math.random() - 0.5) * 25;
+                 }
+              } else {
+                 // Flotar hacia arriba y oscilar (wobble)
+                 bubble.position.y += bubble.userData.speedY;
+                 bubble.position.x += Math.sin(Date.now() * bubble.userData.wobbleSpeed) * 0.01;
+                 
+                 // Bucle infinito: si salen de la pantalla, vuelven abajo
+                 if(bubble.position.y > 12) {
+                    bubble.position.y = -12;
+                    bubble.position.x = (Math.random() - 0.5) * 25;
+                 }
+              }
+           });
+
+           renderer.render(scene, camera);
+        };
+        animate();
+
+        // Limpieza al desmontar
+        return () => {
+           window.removeEventListener('resize', handleResize);
+           window.removeEventListener('mousedown', onInteract);
+           window.removeEventListener('touchstart', onInteract);
+           cancelAnimationFrame(animationFrameId);
+           if (mountRef.current) mountRef.current.removeChild(renderer.domElement);
+        };
+      }, []);
+
+      return (
+        // Fondo tipo Ópalo Morado con TailwindCSS
+        <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-[#f8f9fa] via-[#e6e6fa] to-[#d8bfd8] touch-none">
+           
+           {/* Encabezado */}
+           <div className="absolute top-0 left-0 w-full pt-16 px-4 z-10 pointer-events-none flex flex-col items-center justify-center text-center">
+              <h1 className="text-4xl md:text-6xl lg:text-7xl text-[#7a496b] font-romantic drop-shadow-sm mb-4 leading-tight">
+                 Revientame el Corazón <br/> como si fuera una burbuja...
+              </h1>
+              <p className="text-xl md:text-2xl text-[#9b6a8d] font-sub tracking-widest uppercase mt-4">
+                 Feliz 14 de febrero
+              </p>
+           </div>
+
+           {/* Contenedor de Three.js */}
+           <div ref={mountRef} className="absolute top-0 left-0 w-full h-full cursor-pointer z-0" />
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
