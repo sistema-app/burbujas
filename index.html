@@ -17,7 +17,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
-    body { margin: 0; overflow: hidden; background-color: #f3e7e9; }
+    body { margin: 0; overflow: hidden; background-color: #f3e7e9; touch-action: none; }
     .font-romantic { font-family: 'Great Vibes', cursive; }
     .font-sub { font-family: 'Montserrat', sans-serif; }
   </style>
@@ -36,13 +36,12 @@
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // Alpha true permite que se vea el fondo CSS (ópalo morado)
         const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimización para móviles
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         mountRef.current.appendChild(renderer.domElement);
 
-        // 2. Iluminación (Da el brillo elegante a las burbujas)
+        // 2. Iluminación
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -55,7 +54,6 @@
         const geometry = new THREE.SphereGeometry(1, 32, 32);
 
         for(let i = 0; i < 35; i++) {
-           // Material "MeshPhysicalMaterial" simula cristal/agua
            const material = new THREE.MeshPhysicalMaterial({
              color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
              transmission: 0.9,
@@ -67,7 +65,6 @@
            });
            const sphere = new THREE.Mesh(geometry, material);
            
-           // Posición inicial aleatoria
            sphere.position.set(
                (Math.random() - 0.5) * 25, 
                (Math.random() - 0.5) * 20 - 10, 
@@ -86,22 +83,31 @@
 
         camera.position.z = 12;
 
-        // 4. Sintetizador de Sonido (Web Audio API)
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // 4. Sintetizador de Sonido (CORREGIDO PARA MÓVILES)
+        let audioCtx = null; // Lo iniciamos vacío
+
         const playPop = () => {
-           if(audioCtx.state === 'suspended') audioCtx.resume();
+           // Inicialización perezosa: Solo se crea cuando el usuario toca la pantalla
+           if (!audioCtx) {
+              const AudioContext = window.AudioContext || window.webkitAudioContext;
+              audioCtx = new AudioContext();
+           }
+           
+           // Desbloquea el audio si el celular lo había suspendido
+           if(audioCtx.state === 'suspended') {
+              audioCtx.resume();
+           }
+
            const osc = audioCtx.createOscillator();
            const gain = audioCtx.createGain();
            
-           // Notas musicales suaves (C5, E5, G5, C6, E6)
            const pitches = [523.25, 659.25, 783.99, 1046.50, 1318.51]; 
            osc.frequency.value = pitches[Math.floor(Math.random() * pitches.length)];
-           osc.type = 'sine'; // Sonido suave y redondo
+           osc.type = 'sine';
            
            osc.connect(gain);
            gain.connect(audioCtx.destination);
            
-           // Curva de sonido (Ataque rápido, decaimiento suave)
            gain.gain.setValueAtTime(0, audioCtx.currentTime);
            gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
@@ -115,6 +121,13 @@
         const mouse = new THREE.Vector2();
 
         const onInteract = (event) => {
+           // Necesitamos inicializar el audio en el contexto directo del evento
+           if (!audioCtx) {
+              const AudioContext = window.AudioContext || window.webkitAudioContext;
+              audioCtx = new AudioContext();
+           }
+           if (audioCtx.state === 'suspended') audioCtx.resume();
+
            let clientX = event.clientX;
            let clientY = event.clientY;
            if(event.touches && event.touches.length > 0) {
@@ -154,11 +167,9 @@
            
            bubbles.forEach(bubble => {
               if(bubble.userData.popping) {
-                 // Efecto de reventar: Crece y se desvanece rápido
                  bubble.scale.addScalar(0.15);
                  bubble.material.opacity -= 0.1;
                  
-                 // Resetear burbuja abajo
                  if(bubble.material.opacity <= 0) {
                     bubble.userData.popping = false;
                     bubble.scale.set(1,1,1);
@@ -167,11 +178,9 @@
                     bubble.position.x = (Math.random() - 0.5) * 25;
                  }
               } else {
-                 // Flotar hacia arriba y oscilar (wobble)
                  bubble.position.y += bubble.userData.speedY;
                  bubble.position.x += Math.sin(Date.now() * bubble.userData.wobbleSpeed) * 0.01;
                  
-                 // Bucle infinito: si salen de la pantalla, vuelven abajo
                  if(bubble.position.y > 12) {
                     bubble.position.y = -12;
                     bubble.position.x = (Math.random() - 0.5) * 25;
@@ -183,7 +192,6 @@
         };
         animate();
 
-        // Limpieza al desmontar
         return () => {
            window.removeEventListener('resize', handleResize);
            window.removeEventListener('mousedown', onInteract);
@@ -194,10 +202,7 @@
       }, []);
 
       return (
-        // Fondo tipo Ópalo Morado con TailwindCSS
-        <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-[#f8f9fa] via-[#e6e6fa] to-[#d8bfd8] touch-none">
-           
-           {/* Encabezado */}
+        <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-[#f8f9fa] via-[#e6e6fa] to-[#d8bfd8] touch-none select-none">
            <div className="absolute top-0 left-0 w-full pt-16 px-4 z-10 pointer-events-none flex flex-col items-center justify-center text-center">
               <h1 className="text-4xl md:text-6xl lg:text-7xl text-[#7a496b] font-romantic drop-shadow-sm mb-4 leading-tight">
                  Revientame el Corazón <br/> como si fuera una burbuja...
@@ -206,8 +211,6 @@
                  Feliz 14 de febrero
               </p>
            </div>
-
-           {/* Contenedor de Three.js */}
            <div ref={mountRef} className="absolute top-0 left-0 w-full h-full cursor-pointer z-0" />
         </div>
       );
